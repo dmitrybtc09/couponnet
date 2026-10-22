@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CouponNet Wallet</title>
+    <link rel="manifest" href="manifest.json">
+
+    <style>
+        body { font-family: sans-serif; background: #121212; color: #fff; padding: 20px; text-align: center; }
+        button { background: #007bff; color: white; border: none; padding: 15px 30px; font-size: 16px; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 20px; }
+        .box { background: #1e1e1e; border: 1px solid #333; padding: 15px; border-radius: 8px; margin-top: 20px; word-break: break-all; font-family: monospace; font-size: 12px; text-align: left; }
+    </style>
+</head>
+<body>
+
+    <h2>🎟️ CouponNet Wallet</h2>
+    
+    <!-- Баланс -->
+    <div style="background: #252525; padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #007bff;">
+        <span style="color: #aaa; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Баланс CouponNet</span>
+        <div style="font-size: 36px; font-weight: bold; margin-top: 5px; color: #007bff;"><span id="balance">0.00</span> 🪙</div>
+    </div>
+    
+    <button id="generateBtn">Создать кошелек</button>
+    
+    <div id="status" style="margin-top: 15px; color: #aaa;">Загрузка системы...</div>
+    <div id="addressBox" class="box" style="display:none;"><b>Ваш адрес (Public Key):</b><br><span id="address"></span></div>
+
+    <!-- Кнопка камеры -->
+    <button id="scanBtn" style="background: #28a745; margin-top: 15px;">📷 Включить офлайн-сканер</button>
+
+    <!-- Облегченный видеоплеер для камеры -->
+    <video id="video" style="width: 100%; max-width: 400px; display: none; margin-top: 20px; border-radius: 12px; border: 2px solid #28a745;" autoplay playsinline></video>
+
+    <script>
+        const DB_NAME = "CouponNetDB";
+        const STORE_NAME = "wallet";
+        let db, videoStream;
+
+        // 1. Инициализация локальной базы данных
+        const request = indexedDB.open(DB_NAME, 2);
+        request.onupgradeneeded = (e) => {
+            const database = e.target.result;
+            if (!database.objectStoreNames.contains(STORE_NAME)) database.createObjectStore(STORE_NAME);
+        };
+        request.onsuccess = (e) => {
+            db = e.target.result;
+            checkExistingWallet();
+        };
+
+        function checkExistingWallet() {
+            const tx = db.transaction(STORE_NAME, "readonly");
+            const store = tx.objectStore(STORE_NAME);
+            store.get("keys").onsuccess = (e) => {
+                if (e.target.result) {
+                    showWallet(e.target.result.publicKey);
+                    document.getElementById('generateBtn').style.display = "none";
+                    store.get("balance").onsuccess = (el) => {
+                        document.getElementById('balance').innerText = (el.target.result || 0).toFixed(2);
+                        document.getElementById('status').innerText = "📱 Офлайн-кошелек готов к работе";
+                    };
+                } else {
+                    document.getElementById('status').innerText = "👋 Создайте новый кошелек";
+                }
+            };
+        }
+
+        document.getElementById('generateBtn').addEventListener('click', async () => {
+            try {
+                const keyPair = await window.crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+                const tx = db.transaction(STORE_NAME, "readwrite");
+                const store = tx.objectStore(STORE_NAME);
+                store.put({ publicKey: keyPair.publicKey, privateKey: keyPair.privateKey }, "keys");
+                store.put(0.00, "balance");
+                tx.oncomplete = () => {
+                    showWallet(keyPair.publicKey);
+                    document.getElementById('generateBtn').style.display = "none";
+                    document.getElementById('status').innerText = "✅ Кошелек успешно создан!";
+                };
+            } catch (err) { document.getElementById('status').innerText = "❌ Ошибка криптографии: " + err.message; }
+        });
+
+        async function showWallet(pubKey) {
+            const exported = await window.crypto.subtle.exportKey("raw", pubKey);
+            const hex = Array.from(new Uint8Array(exported)).map(b => b.toString(16).padStart(2, '0')).join('');
+            document.getElementById('address').innerText = "0x" + hex;
+            document.getElementById('addressBox').style.display = "block";
+        }
+
+        // 2. Встроенный сканнер QR-кодов смартфона (100% Офлайн)
+        document.getElementById('scanBtn').addEventListener('click', async () => {
+            const status = document.getElementById('status');
+            const video = document.getElementById('video');
+            
+            if (!('BarcodeDetector' in window)) {
+                status.innerText = "❌ Ваш браузер устарел. Откройте страницу через современный Chrome / Safari.";
+                return;
+            }
+
+            status.innerText = "🎥 Запуск камеры...";
+            
+            try {
+                // Запрашиваем у телефона доступ к задней камере
+                videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                video.srcObject = videoStream;
+                video.style.display = "inline-block";
+                
+                status.innerText = "🔍 Наведите камеру на QR-код купона";
+
+                // Инициализируем системный детектор кодов
+                const detector = new BarcodeDetector({ formats: ['qr_code'] });
+                
+                // Запускаем цикл сканирования кадров видео
+                const interval = setInterval(async () => {
+                    try {
+                        const barcodes = await detector.detect(video);
+                        if (barcodes.length > 0) {
+                            const codeData = barcodes[0].rawValue;
+                            
+                            if (codeData.startsWith("couponnet:chips:")) {
+                                const coins = parseFloat(codeData.split(":")[2]);
+                                if (!isNaN(coins)) {
+                                    clearInterval(interval);
+                                    updateBalance(coins);
+                                    status.innerText = `🎉 Начислено +${coins} 🪙!`;
+                                    stopCamera();
+                                }
+                            }
+                        }
+                    } catch (e) { /* Игнорируем пустые кадры */ }
+                }, 300); // Проверяем кадр каждые 300 миллисекунд
+
+            } catch (err) {
+                status.innerText = `❌ Ошибка камеры: ${err.message}. Убедитесь, что используете HTTPS!`;
+            }
+        });
+
+        function updateBalance(amount) {
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            const store = tx.objectStore(STORE_NAME);
+            store.get("balance").onsuccess = (e) => {
+                const newBalance = (e.target.result || 0) + amount;
+                store.put(newBalance, "balance");
+                tx.oncomplete = () => {
+                    document.getElementById('balance').innerText = newBalance.toFixed(2);
+                };
+            };
+        }
+
+        function stopCamera() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                document.getElementById('video').style.display = "none";
+            }
+        }
+    </script>
+</body>
+</html>
