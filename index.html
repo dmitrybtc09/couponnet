@@ -6,50 +6,60 @@
     <title>CouponNet Multi-Business Wallet</title>
     <link rel="manifest" href="manifest.json">
     
-    <!-- Зависимости: 3D-движок и наша библиотека анимаций -->
-    <script src="https://aframe.io"></script>
+    <!-- Подключаем нашу легковесную библиотеку нативных HTML5/CSS3 анимаций -->
     <script src="animations.js"></script>
 
     <style>
         body { font-family: sans-serif; background: #121212; color: #fff; padding: 20px; text-align: center; margin: 0; overflow-x: hidden; }
         button { background: #007bff; color: white; border: none; padding: 15px 30px; font-size: 16px; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 20px; transition: background 0.2s; }
         button:active { filter: brightness(0.9); }
+        
         .box { background: #1e1e1e; border: 1px solid #333; padding: 15px; border-radius: 8px; margin-top: 20px; word-break: break-all; font-family: monospace; font-size: 12px; text-align: left; }
+        
+        /* Офлайн сканер камеры */
         #cameraContainer { width: 100%; max-width: 400px; height: 300px; display: none; margin: 20px auto; border-radius: 12px; border: 2px solid #28a745; overflow: hidden; }
         #video { width: 100%; height: 100%; object-fit: cover; }
-        #arOverlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; display: none; background: rgba(0,0,0,0.85); }
-        .ar-ui { position: absolute; bottom: 8%; left: 50%; transform: translateX(-50%); z-index: 10000; text-align: center; width: 90%; }
-        .congrats-text { font-size: 26px; font-weight: bold; color: #ffca28; margin-bottom: 15px; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+        
+        /* Полноэкранный слой оверлея для WOW-анимаций */
+        #arOverlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; display: none; background: rgba(18, 18, 18, 0.9); }
+        
+        .ar-ui { position: absolute; bottom: 8%; left: 50%; transform: translateX(-50%); z-index: 10000; text-align: center; width: 90%; max-width: 360px; }
+        .congrats-text { font-size: 26px; font-weight: bold; color: #ffca28; margin-bottom: 15px; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
+        #closeArBtn { background: #ffca28; color: #121212; font-weight: bold; border-radius: 20px; border: none; padding: 15px 30px; font-size: 16px; width: 100%; box-shadow: 0 4px 15px rgba(255,202,40,0.4); }
     </style>
 </head>
 <body>
 
     <h2>🎟️ CouponNet Wallet</h2>
     
-    <!-- Баланс -->
+    <!-- Баланс пользователя -->
     <div style="background: #252525; padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #007bff;">
-        <span style="color: #aaa; font-size: 14px; text-transform: uppercase;">Баланс CouponNet</span>
+        <span style="color: #aaa; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Баланс CouponNet</span>
         <div style="font-size: 36px; font-weight: bold; margin-top: 5px; color: #007bff;"><span id="balance">0.00</span> 🪙</div>
     </div>
     
     <button id="generateBtn">Создать кошелек</button>
-    <div id="status" style="margin-top: 15px; color: #aaa;">Загрузка...</div>
-    <div id="addressBox" class="box" style="display:none;"><b>Ваш адрес:</b><br><span id="address"></span></div>
+    <div id="status" style="margin-top: 15px; color: #aaa;">Загрузка системы...</div>
+    <div id="addressBox" class="box" style="display:none;"><b>Ваш адрес (Public Key):</b><br><span id="address"></span></div>
 
+    <!-- Кнопки управления офлайн-сканером -->
     <button id="scanBtn" style="background: #28a745; margin-top: 15px;">📷 Включить сканер купонов</button>
     <button id="stopScanBtn" style="background: #dc3545; margin-top: 15px; display: none;">🛑 Отключить сканер</button>
 
-    <div id="cameraContainer"><video id="video" autoplay playsinline></video></div>
+    <!-- Контейнер для видеопотока -->
+    <div id="cameraContainer">
+        <video id="video" autoplay playsinline></video>
+    </div>
 
-    <!-- ТРЕХМЕРНЫЙ СЛОЙ (СЮДА ИНЪЕКТИРУЕТСЯ СЦЕНА) -->
+    <!-- ТРЕХМЕРНЫЙ СЛОЙ НАТИВНЫХ CSS3 ЭФФЕКТОВ -->
     <div id="arOverlay">
         <div class="ar-ui">
             <div class="congrats-text" id="arRewardText">+0.00 🪙</div>
-            <button id="closeArBtn" style="background: #ffca28; color: #121212; font-weight: bold; border-radius: 20px;">Забрать монеты</button>
+            <button id="closeArBtn">Забрать монеты в кошелек</button>
         </div>
         
-        <!-- Сюда скрипт вставит 3D-модели выбранного бизнеса -->
-        <a-scene id="dynamicSceneContainer" embedded vr-mode-ui="enabled: false" style="width: 100%; height: 100%;"></a-scene>
+        <!-- Сюда скрипт динамически вставляет HTML-структуру бизнеса из animations.js -->
+        <div id="dynamicSceneContainer" style="width: 100%; height: 100%;"></div>
     </div>
 
     <script>
@@ -57,31 +67,51 @@
         const STORE_NAME = "wallet";
         let db, videoStream, scanInterval;
 
-        // Инициализация базы данных
+        // 1. Инициализация IndexedDB для хранения ключей и баланса
         const request = indexedDB.open(DB_NAME, 2);
-        request.onupgradeneeded = (e) => { e.target.result.createObjectStore(STORE_NAME); };
-        request.onsuccess = (e) => { db = e.target.result; checkExistingWallet(); };
+        request.onupgradeneeded = (e) => { 
+            const database = e.target.result;
+            if (!database.objectStoreNames.contains(STORE_NAME)) database.createObjectStore(STORE_NAME);
+        };
+        request.onsuccess = (e) => { 
+            db = e.target.result; 
+            checkExistingWallet(); 
+        };
+        request.onerror = () => {
+            document.getElementById('status').innerText = "❌ Ошибка базы данных.";
+        };
 
         function checkExistingWallet() {
             const tx = db.transaction(STORE_NAME, "readonly");
-            tx.objectStore(STORE_NAME).get("keys").onsuccess = (e) => {
+            const store = tx.objectStore(STORE_NAME);
+            
+            store.get("keys").onsuccess = (e) => {
                 if (e.target.result) {
                     showWallet(e.target.result.publicKey);
                     document.getElementById('generateBtn').style.display = "none";
-                    tx.objectStore(STORE_NAME).get("balance").onsuccess = (el) => {
+                    store.get("balance").onsuccess = (el) => {
                         document.getElementById('balance').innerText = (el.target.result || 0).toFixed(2);
                         document.getElementById('status').innerText = "📱 Офлайн-кошелек готов к работе";
                     };
-                } else { document.getElementById('status').innerText = "👋 Создайте кошелек"; }
+                } else { 
+                    document.getElementById('status').innerText = "👋 Создайте новый кошелек"; 
+                }
             };
         }
 
         document.getElementById('generateBtn').addEventListener('click', async () => {
-            const keyPair = await window.crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
-            const tx = db.transaction(STORE_NAME, "readwrite");
-            tx.objectStore(STORE_NAME).put({ publicKey: keyPair.publicKey, privateKey: keyPair.privateKey }, "keys");
-            tx.objectStore(STORE_NAME).put(0.00, "balance");
-            tx.oncomplete = () => { location.reload(); };
+            try {
+                const keyPair = await window.crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+                const tx = db.transaction(STORE_NAME, "readwrite");
+                const store = tx.objectStore(STORE_NAME);
+                store.put({ publicKey: keyPair.publicKey, privateKey: keyPair.privateKey }, "keys");
+                store.put(0.00, "balance");
+                tx.oncomplete = () => { 
+                    location.reload(); 
+                };
+            } catch (err) { 
+                document.getElementById('status').innerText = "❌ Ошибка криптографии: " + err.message; 
+            }
         });
 
         async function showWallet(pubKey) {
@@ -91,46 +121,64 @@
             document.getElementById('addressBox').style.display = "block";
         }
 
-        // Логика сканирования
+        // 2. Логика работы встроенного BarcodeDetector API
         document.getElementById('scanBtn').addEventListener('click', async () => {
-            if (!('BarcodeDetector' in window)) { alert("BarcodeDetector не поддерживается!"); return; }
+            const status = document.getElementById('status');
+            const video = document.getElementById('video');
+            
+            if (!('BarcodeDetector' in window)) { 
+                status.innerText = "❌ Нативный сканер QR не поддерживается браузером.";
+                return; 
+            }
+            
+            status.innerText = "🎥 Запуск камеры...";
             try {
                 videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-                document.getElementById('video').srcObject = videoStream;
+                video.srcObject = videoStream;
                 document.getElementById('cameraContainer').style.display = "block";
                 document.getElementById('scanBtn').style.display = "none";
                 document.getElementById('stopScanBtn').style.display = "block";
+                status.innerText = "🔍 Наведите камеру на QR-код";
 
                 const detector = new BarcodeDetector({ formats: ['qr_code'] });
+                
                 scanInterval = setInterval(async () => {
-                    const barcodes = await detector.detect(document.getElementById('video'));
-                    if (barcodes.length > 0) {
-                        const codeData = barcodes[0].rawValue;
-                        
-                        // Парсим строку вида: couponnet:pizza:100
-                        if (codeData.startsWith("couponnet:")) {
-                            clearInterval(scanInterval);
-                            const parts = codeData.split(":");
-                            const businessType = parts[1]; // pizza, coffee, и т.д.
-                            const coins = parseFloat(parts[2]);
+                    try {
+                        const barcodes = await detector.detect(video);
+                        if (barcodes.length > 0) {
+                            const codeData = barcodes[0].rawValue;
+                            
+                            // Формат кодов: couponnet:ТИП_БИЗНЕСА:КОЛИЧЕСТВО
+                            if (codeData.startsWith("couponnet:")) {
+                                clearInterval(scanInterval);
+                                const parts = codeData.split(":");
+                                const businessType = parts[1]; 
+                                const coins = parseFloat(parts[2]);
 
-                            if (!isNaN(coins)) {
-                                stopCamera();
-                                triggerAR(businessType, coins); // Вызываем динамический рендер
+                                if (!isNaN(coins)) {
+                                    stopCamera();
+                                    triggerARAnimation(businessType, coins); // Запуск HTML5-анимации
+                                }
                             }
                         }
-                    }
+                    } catch (e) {}
                 }, 300);
-            } catch (err) { alert(err.message); }
+            } catch (err) { 
+                status.innerText = `❌ Ошибка камеры: ${err.message}`; 
+            }
         });
 
-        function triggerAR(businessType, amount) {
+        document.getElementById('stopScanBtn').addEventListener('click', stopCamera);
+
+        // Функция включения графического оверлея
+        function triggerARAnimation(businessType, amount) {
             document.getElementById('arRewardText').innerText = `🎁 Начислено +${amount.toFixed(2)} 🪙!`;
             
-            // Магия: Передаем тип бизнеса в наш внешний файл анимаций
+            // Запрашиваем рендер нужного стиля из нашего внешнего файла animations.js
             CouponNetAnimations.render(businessType, 'dynamicSceneContainer');
             
             document.getElementById('arOverlay').style.display = "block";
+            
             document.getElementById('closeArBtn').onclick = () => {
                 document.getElementById('arOverlay').style.display = "none";
                 updateBalance(amount);
@@ -143,17 +191,24 @@
             store.get("balance").onsuccess = (e) => {
                 const newBalance = (e.target.result || 0) + amount;
                 store.put(newBalance, "balance");
-                tx.oncomplete = () => { document.getElementById('balance').innerText = newBalance.toFixed(2); };
-            };
-        }
+                tx.oncomplete = () => { 
+                    document.getElementById('balance').innerText = newBalance.toFixed(2); 
+document.getElementById('status').innerText = "🪙 Баланс успешно обновлен!";
+};
+};
+}
+function stopCamera() {
+if (scanInterval) clearInterval(scanInterval);
+if (videoStream) {
+videoStream.getTracks().forEach(track => track.stop());
+videoStream = null;
+}
+document.getElementById('cameraContainer').style.display = "none";
+document.getElementById('scanBtn').style.display = "block";
+document.getElementById('stopScanBtn').style.display = "none";
+document.getElementById('status').innerText = "📱 Офлайн-кошелек готов";
+}
 
-        function stopCamera() {
-            if (scanInterval) clearInterval(scanInterval);
-            if (videoStream) videoStream.getTracks().forEach(track => track.stop());
-            document.getElementById('cameraContainer').style.display = "none";
-            document.getElementById('scanBtn').style.display = "block";
-            document.getElementById('stopScanBtn').style.display = "none";
-        }
     </script>
 </body>
 </html>

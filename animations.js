@@ -1,83 +1,219 @@
 /**
- * CouponNet.ru — Модуль динамических WebAR-анимаций для бизнеса
+ * CouponNet.ru — Модуль нативных HTML5/CSS3 3D-анимаций для бизнеса
  */
 
 const CouponNetAnimations = {
-    // 1. Анимация для Пиццерии (Коробка открывается, вылетает монета)
-    pizza: `
+    // Внедряем CSS-стили для 3D-объектов прямо в документ
+    initStyles() {
+        if (document.getElementById('couponnet-effects-styles')) return;
         
-            <!-- Нижняя часть коробки -->
-            <a-box position="0 -0.1 0" width="2.2" height="0.1" depth="2.2" color="#f5f5dc" roughness="0.8">
-                <!-- Пицца -->
-                <a-cylinder position="0 0.06 0" radius="0.9" height="0.04" color="#e67e22" roughness="0.9">
-                    <a-cylinder position="0 0.01 0" radius="0.8" height="0.04" color="#f1c40f" roughness="0.6">
-                        <!-- Пепперони -->
-                        <a-circle position="0.3 0.03 0.2" radius="0.12" color="#c0392b" rotation="-90 0 0"></a-circle>
-                        <a-circle position="-0.4 0.03 -0.3" radius="0.12" color="#c0392b" rotation="-90 0 0"></a-circle>
-                        <a-circle position="0.2 0.03 -0.4" radius="0.12" color="#c0392b" rotation="-90 0 0"></a-circle>
-                        <a-circle position="-0.2 0.03 0.4" radius="0.12" color="#c0392b" rotation="-90 0 0"></a-circle>
-                    </a-cylinder>
-                </a-cylinder>
-            </a-box>
-            <!-- Верхняя крышка -->
-            
-                <a-box position="0 0 1.1" width="2.2" height="0.06" depth="2.2" color="#e74c3c" roughness="0.8">
-                    <a-circle position="0 0.04 0" radius="0.4" color="#fff" rotation="-90 0 0"></a-circle>
-                </a-box>
-                <a-animation attribute="rotation" from="0 0 0" to="-110 0 0" dur="1200" delay="500" easing="ease-out" fill="forwards"></a-animation>
-            
-            <!-- Вылетающая монета -->
-            
-                <a-cylinder radius="0.4" height="0.06" rotation="90 0 0" color="#ffca28" metalness="0.9" roughness="0.2">
-                    <a-cylinder radius="0.3" height="0.07" color="#ffd54f" metalness="0.9" roughness="0.1"></a-cylinder>
-                </a-cylinder>
-                <a-animation attribute="position" from="0 0.1 0" to="0 1.8 0" dur="1000" delay="1200" easing="ease-out" fill="forwards"></a-animation>
-                <a-animation attribute="rotation" dur="2000" to="0 360 0" repeat="indefinite" easing="linear"></a-animation>                    
-    `,
+        const style = document.createElement('style');
+        style.id = 'couponnet-effects-styles';
+        style.innerHTML = `
+            /* Общая 3D сцена */
+            .stage-3d {
+                width: 100%;
+                height: 100%;
+                perspective: 1000px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                position: relative;
+            }
 
-    // 2. Анимация для Кофеен (Стаканчик кофе, из которого поднимаются ароматные монеты)
-    coffee: `
-        
-            <!-- Стаканчик кофе -->
-            <a-cone radius-bottom="0.5" radius-top="0.7" height="1.8" color="#d35400" roughness="0.5">
-                <!-- Белая крышка -->
-                <a-cylinder position="0 0.95 0" radius="0.72" height="0.1" color="#ffffff"></a-cylinder>
-                <!-- Манжета/Держатель -->
-                <a-cylinder position="0 0 0" radius="0.63" height="0.6" color="#f39c12" roughness="0.9"></a-cylinder>
-            </cone>
-            <!-- Монета, вылетающая из стаканчика вверх в облаке пара -->
-            
-                <a-cylinder radius="0.35" height="0.06" rotation="90 0 0" color="#ffca28" metalness="0.9">
-                    <a-cylinder radius="0.25" height="0.07" color="#ffd54f" metalness="0.9"></a-cylinder>
-                </a-cylinder>
-                <a-animation attribute="position" from="0 1 0" to="0 2.5 0" dur="1500" delay="300" easing="ease-out" fill="forwards"></a-animation>
-                <a-animation attribute="rotation" dur="1500" to="360 360 0" repeat="indefinite" easing="linear"></a-animation>
-            
-        
-    `,
+            /* 1. АНИМАЦИЯ: ПИЦЦЕРИЯ */
+            .pizza-world {
+                position: relative;
+                width: 200px;
+                height: 200px;
+                transform-style: preserve-3d;
+                transform: rotateX(60deg) rotateZ(-30deg);
+                animation: introStage 1.5s ease-out forwards;
+            }
 
-    // 3. Универсальная анимация по умолчанию (Просто парящая большая монета)
-    default: `
-        
-            <a-cylinder radius="1.2" height="0.15" rotation="90 0 0" color="#ffca28" roughness="0.3" metalness="0.8">
-                <a-cylinder radius="0.9" height="0.17" color="#ffd54f" roughness="0.2" metalness="0.9"></a-cylinder>
-            </a-cylinder>
-            <a-animation attribute="rotation" dur="2500" to="0 360 0" repeat="indefinite" easing="linear"></a-animation>
-            <a-animation attribute="position" dur="1500" direction="alternate" to="0 0.8 0" repeat="indefinite" easing="ease-in-out"></a-animation>
-        
-    `,
+            /* Коробка (низ) */
+            .pizza-box-bottom {
+                position: absolute;
+                width: 200px;
+                height: 200px;
+                background: #f5f5dc;
+                border: 4px solid #d2b48c;
+                border-radius: 8px;
+                box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
 
-    // Функция динамического рендеринга сцены
+            /* Пицца внутри */
+            .pizza-item {
+                width: 170px;
+                height: 170px;
+                background: #e67e22; /* Корочка */
+                border-radius: 50%;
+                position: relative;
+                box-shadow: inset 0 0 10px #d35400;
+            }
+            .pizza-cheese {
+                position: absolute;
+                top: 10px; left: 10px; right: 10px; bottom: 10px;
+                background: #f1c40f; /* Сыр */
+                border-radius: 50%;
+            }
+            /* Пепперони */
+            .pepperoni {
+                position: absolute; width: 25px; height: 25px;
+                background: #c0392b; border-radius: 50%;
+            }
+
+            /* Крышка коробки */
+            .pizza-box-top {
+                position: absolute;
+                width: 200px;
+                height: 200px;
+                background: #e74c3c;
+                border: 2px solid #c0392b;
+                border-radius: 8px;
+                top: 0; left: 0;
+                transform-origin: top center;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-family: sans-serif;
+                font-weight: bold;
+                font-size: 24px;
+                box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
+                animation: openPizzaBox 1.2s 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+            }
+
+            /* 2. АНИМАЦИЯ: КОФЕЙНЯ */
+            .coffee-world {
+                position: relative;
+                width: 120px;
+                height: 180px;
+                transform-style: preserve-3d;
+                animation: introCoffee 1.2s ease-out forwards;
+            }
+            .coffee-cup {
+                width: 100%; height: 100%;
+                background: linear-gradient(to right, #d35400, #e67e22);
+                border-radius: 10px 10px 40px 40px;
+                box-shadow: 0 15px 30px rgba(0,0,0,0.5);
+                position: relative;
+            }
+            .coffee-holder {
+                position: absolute; top: 40px; width: 100%; height: 50px;
+                background: #f39c12; border-radius: 4px;
+            }
+
+            /* 3. ОБЩИЙ ЭЛЕМЕНТ: ЗОЛОТАЯ МОНЕТА */
+            .coin-html5 {
+                position: absolute;
+                width: 70px;
+                height: 70px;
+                background: radial-gradient(circle, #ffd700, #ffa500);
+                border-radius: 50%;
+                border: 4px double #fff;
+                box-shadow: 0 0 20px #ffca28, inset 0 0 10px rgba(0,0,0,0.3);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 32px;
+                z-index: 10;
+                opacity: 0;
+                transform: translateZ(0) scale(0.5);
+            }
+
+            /* Вылет монеты из пиццы */
+            .coin-pizza-fly {
+                animation: 
+                    coinFlyUp 1s 1.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards,
+                    coinSpin 2s 2.8s infinite linear;
+            }
+
+            /* Вылет монеты из кофе */
+            .coin-coffee-fly {
+                animation: 
+                    coinFlyCoffee 1.2s 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards,
+                    coinSpin 2s 1.7s infinite linear;
+            }
+
+            /* КЛЮЧЕВЫЕ КАДРЫ АНИМАЦИЙ (CSS КЕЙФРЕЙМЫ) */
+            @keyframes introStage {
+                0% { transform: scale(0.2) rotateX(0deg) rotateZ(0deg); opacity: 0; }
+                100% { transform: scale(1) rotateX(60deg) rotateZ(-30deg); opacity: 1; }
+            }
+            @keyframes openPizzaBox {
+                0% { transform: rotateX(0deg); }
+                100% { transform: rotateX(-120deg); opacity: 0.9; filter: brightness(0.6); }
+            }
+            @keyframes introCoffee {
+                0% { transform: translateY(200px) scale(0.5); opacity: 0; }
+                100% { transform: translateY(0) scale(1); opacity: 1; }
+            }
+            @keyframes coinFlyUp {
+                0% { opacity: 0; transform: translateZ(0) scale(0.5) rotateY(0deg); }
+                100% { opacity: 1; transform: translateZ(250px) scale(1.3) rotateY(360deg); }
+            }
+            @keyframes coinFlyCoffee {
+                0% { opacity: 0; transform: translateY(0) scale(0.5) rotateY(0deg); }
+                100% { opacity: 1; transform: translateY(-160px) scale(1.4) rotateY(360deg); }
+            }
+            @keyframes coinSpin {
+                0% { transform: translateZ(250px) scale(1.3) rotateY(0deg); }
+                50% { transform: translateZ(250px) scale(1.3) rotateY(180deg); }
+                100% { transform: translateZ(250px) scale(1.3) rotateY(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+    },
+
+    // Шаблоны верстки для разных бизнесов
+    templates: {
+        pizza: `
+            <div class="pizza-world">
+                <!-- Нижняя часть коробки и пицца -->
+                <div class="pizza-box-bottom">
+                    <div class="pizza-item">
+                        <div class="pizza-cheese">
+                            <div class="pepperoni" style="top:20px; left:30px;"></div>
+                            <div class="pepperoni" style="top:30px; right:20px;"></div>
+                            <div class="pepperoni" style="bottom:20px; left:50px;"></div>
+                            <div class="pepperoni" style="top:75px; left:70px;"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Летящая золотая монета -->
+                <div class="coin-html5 coin-pizza-fly">🪙</div>
+                <!-- Крышка коробки -->
+                <div class="pizza-box-top">🍕 PIZZA</div>
+            </div>
+        `,
+        coffee: `
+            <div class="coffee-world">
+                <div class="coffee-cup">
+                    <div class="coffee-holder"></div>
+                </div>
+                <div class="coin-html5 coin-coffee-fly" style="top: 40px; left: 25px;">🪙</div>
+            </div>
+        `,
+        default: `
+            <div class="coin-html5" style="opacity:1; transform:scale(1.8); animation: coinSpin 3s infinite linear;">🪙</div>
+        `
+    },
+
+    // Главная функция рендеринга
     render(businessType, containerId) {
+        this.initStyles(); // Инициализируем стили
         const container = document.getElementById(containerId);
         if (!container) return;
-        
-        // Очищаем старую сцену, оставляя только базовые элементы (камеру и свет)
+
+        // Вставляем чистую HTML-структуру
         container.innerHTML = `
-            
-            <a-ambient-light color="#ffffff" intensity="0.7"></a-ambient-light>
-            <a-directional-light position="2 4 3" intensity="0.8" color="#fff"></a-directional-light>
-            ${this[businessType] || this.default}
+            <div class="stage-3d">
+                ${this.templates[businessType] || this.templates.default}
+            </div>
         `;
     }
 };
